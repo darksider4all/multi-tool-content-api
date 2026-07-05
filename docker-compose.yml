@@ -1,0 +1,20 @@
+services:
+  rapidapi-service:
+    build: .
+    container_name: rapidapi-service
+    restart: unless-stopped
+    ports:
+      - "8100:8100"
+    environment:
+      - PORT=8100
+      - WORKERS=2
+      - RATE_MAX=60
+      - API_GATEWAY_KEY=${API_GATEWAY_KEY:-}
+      - RAPIDAPI_PROXY_SECRET=${RAPIDAPI_PROXY_SECRET:-}
+      - ENABLE_DOCS=false
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8100/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

@@ -1,69 +1,81 @@
-# 🛠️ Multi-Tool Content API
+# Multi-Tool Content API
 
-[![Try on RapidAPI](https://img.shields.io/badge/RapidAPI-Try%20Now-blue)](https://rapidapi.com/oaidaadrian/api/multi-tool-content)
-[![Apify Actors](https://img.shields.io/badge/Apify-Actors-orange)](https://apify.com/darknezz)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+One self-hostable API for the content-processing tasks that keep coming up in
+AI and data pipelines: full-text RSS parsing, clean article extraction,
+sitemap crawling, and llms.txt generation.
 
-One API for all your content processing needs — RSS parsing, article extraction, sitemap crawling, AI-readable file generation, and B2B lead search.
+Single Python file + Docker. No accounts, no API keys, no external services —
+`docker compose up` and it's running on localhost.
 
-## 🚀 Quick Start
+## Quick start (self-hosted)
 
-```python
-import requests
-
-url = "https://multi-tool-content.p.rapidapi.com/rss/parse"
-headers = {
-    "X-RapidAPI-Key": "YOUR_KEY",
-    "X-RapidAPI-Host": "multi-tool-content.p.rapidapi.com",
-    "Content-Type": "application/json"
-}
-payload = {"feed_url": "https://feeds.feedburner.com/TheHackersNews", "max_items": 10}
-
-response = requests.post(url, json=payload, headers=headers)
-print(response.json())
+```bash
+git clone https://github.com/darksider4all/multi-tool-content-api.git
+cd multi-tool-content-api
+docker compose up -d
+curl http://localhost:8100/health
 ```
 
-## 📋 Endpoints
+Parse a feed with full article extraction:
+
+```bash
+curl -X POST http://localhost:8100/rss/parse \
+  -H "Content-Type: application/json" \
+  -d '{"feed_url": "https://hnrss.org/frontpage", "max_items": 5}'
+```
+
+## Endpoints
 
 | Endpoint | Method | Description |
 |---|---|---|
 | `/health` | GET | Health check |
-| `/rss/parse` | POST | Parse RSS/Atom feeds with full article extraction |
-| `/content/extract` | POST | Extract clean text & metadata from any URL |
-| `/sitemap/crawl` | POST | Crawl sitemap.xml and extract structured content |
-| `/llms-txt/generate` | POST | Generate AI-readable llms.txt files |
-| `/ro-businesses/search` | POST | Search Romanian business directory for B2B leads |
+| `/rss/parse` | POST | Parse RSS/Atom feeds; follows each link and extracts the **full article text**, not just the feed summary |
+| `/content/extract` | POST | Clean text + metadata from any URL (boilerplate removed via trafilatura) |
+| `/sitemap/crawl` | POST | Walk a sitemap.xml and extract structured content from every page |
+| `/llms-txt/generate` | POST | Crawl a site and generate an [llms.txt](https://llmstxt.org/) file |
+| `/ro-businesses/search` | POST | Search the Romanian business directory (listafirme.ro) for B2B leads |
 
-## 💰 Pricing
+Interactive docs: set `ENABLE_DOCS=true` and open `http://localhost:8100/docs`.
 
-| Tier | Price | Requests/mo |
+## Configuration
+
+All optional — the defaults give you an open instance on localhost.
+
+| Env var | Default | Purpose |
 |---|---|---|
-| Free | $0 | 100 |
-| Basic | $10/mo | 5,000 |
-| Pro | $29/mo | 25,000 |
+| `PORT` | `8100` | Listen port |
+| `WORKERS` | `2` | Uvicorn workers |
+| `RATE_MAX` | `60` | Requests per minute per client IP |
+| `API_GATEWAY_KEY` | *(empty)* | If set, requests must send `X-API-Key` or `Authorization: Bearer` with this value. Leave empty for open mode. |
+| `RAPIDAPI_PROXY_SECRET` | *(empty)* | Only for deployments behind RapidAPI — validates the `X-RapidAPI-Proxy-Secret` header RapidAPI adds to proxied requests |
+| `ENABLE_DOCS` | `false` | Expose Swagger UI at `/docs` |
 
-## 🔗 Links
+If you expose the service beyond localhost, set `API_GATEWAY_KEY`.
 
-- **RapidAPI:** [multi-tool-content](https://rapidapi.com/oaidaadrian/api/multi-tool-content)
-- **Apify Actors:** [darknezz](https://apify.com/darknezz)
-- **Live Docs:** [api.adrianhomelab.com/docs](https://api.adrianhomelab.com/docs)
+## How it works
 
-## 📖 Articles & Tutorials
+- **FastAPI** service, one file: [`app/main.py`](app/main.py)
+- **trafilatura** for article/content extraction (with lxml + BeautifulSoup for
+  the structural bits)
+- **feedparser** for RSS/Atom
+- Per-IP rate limiting and optional key auth in a small middleware
 
-- [5 APIs Every Developer Needs](https://dev.to/oaida_adrian_afa2428f63d0/5-apis-every-developer-needs-for-content-processing-rss-extraction-sitemaps-ai-2630)
-- [RSS Aggregator with Full Content Extraction](https://dev.to/oaida_adrian_afa2428f63d0/i-built-an-rss-aggregator-that-extracts-full-article-content-not-just-summaries-ifl)
-- [Make Any Website AI-Readable with llms.txt](https://dev.to/oaida_adrian_afa2428f63d0/make-any-website-ai-readable-generating-llmstxt-files-with-python-3jop)
-- [Scraping Romanian Business Data](https://dev.to/oaida_adrian_afa2428f63d0/scraping-187000-romanian-businesses-building-a-b2b-lead-generation-tool-176n)
-- [Extract Content From Sitemaps](https://dev.to/oaida_adrian_afa2428f63d0/how-to-extract-clean-content-from-any-website-sitemap-for-seo-audits-ai-training-15a9)
+## Limitations
 
-## 🏗️ Architecture
+- No JavaScript rendering — extraction works on server-side HTML, so
+  SPA-heavy sites extract poorly.
+- Extraction quality is whatever trafilatura manages on a given page; it's
+  very good on articles and docs, weaker on heavily templated pages.
+- The in-memory rate limiter is per-process — fine for a single instance,
+  not a distributed deployment.
 
-Built with FastAPI, deployed on homelab infrastructure behind Cloudflare tunnel.
+## Hosted options
 
-```
-Client → RapidAPI Proxy → Cloudflare Tunnel → Caddy → FastAPI (Docker)
-```
+If you'd rather not self-host: the same API is available on
+[RapidAPI](https://rapidapi.com/oaidaadrian/api/multi-tool-content) (free tier
+available), and the individual tools are published as standalone actors on the
+[Apify store](https://apify.com/darknezz).
 
-## 📝 License
+## License
 
 MIT
